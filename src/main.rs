@@ -20,8 +20,8 @@ use glutin::{
 
 use glutin_winit::{finalize_window, DisplayBuilder, GlWindow};
 
+mod mesh;
 mod renderer;
-mod shader;
 
 use renderer::Renderer;
 
@@ -112,7 +112,7 @@ fn main() -> Result<()> {
         },
         Event::AboutToWait => {
             if let Some((gl_context, gl_surface, window)) = &state {
-                renderer.as_ref().unwrap().draw();
+                renderer.as_mut().unwrap().draw();
 
                 window.request_redraw();
 

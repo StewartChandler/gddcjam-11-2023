@@ -1,18 +1,25 @@
 use std::ffi::{CStr, CString};
 
-use eyre::Context;
 use gl::types::*;
 use glutin::prelude::GlDisplay;
 
-use crate::shader::{Program, ProgramBuilder, Shader};
-
 use ::eyre::Result;
+use lazy_static::lazy_static;
+
+mod buffer;
+mod shader;
+use shader::{Program, ProgramBuilder, Shader};
 
 use safe_gl::*;
+
+use crate::mesh::Mesh;
+
+use self::buffer::VertArrayObject;
 
 #[derive(Debug)]
 pub(crate) struct Renderer<'a> {
     program: Program<'a>,
+    vao: VertArrayObject,
 }
 
 // Safety: explicitly added the null terminator
@@ -22,6 +29,10 @@ const VERT: &'static CStr = unsafe {
 const FRAG: &'static CStr = unsafe {
     CStr::from_bytes_with_nul_unchecked(concat!(include_str!("frag.glsl"), "\0").as_bytes())
 };
+
+lazy_static! {
+    static ref CUBE_MESH: Mesh = Mesh::from_str(include_str!("res/cube.obj"));
+}
 
 // all
 impl<'a> Renderer<'a> {
@@ -41,16 +52,27 @@ impl<'a> Renderer<'a> {
         let f_shader: Shader<{ gl::FRAGMENT_SHADER }> = Shader::from_bytes(FRAG)?;
 
         let prog = ProgramBuilder::new()?
+            .gl_bind_attrib(0, unsafe {
+                CStr::from_bytes_with_nul_unchecked(b"vert_pos\0")
+            })
             .attach(&v_shader)
             .attach(&f_shader)
             .build()?;
 
-        Ok(Self { program: prog })
+        Ok(Self {
+            program: prog,
+            vao: VertArrayObject::new(&CUBE_MESH),
+        })
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&mut self) {
         clear_colour(0.7, 0.6, 0.8, 1.0);
         clear(gl::COLOR_BUFFER_BIT);
+
+        self.program.use_program();
+        self.vao.bind()
+
+        // draw the mesh
     }
 
     pub fn resize(&self, width: u32, height: u32) {
