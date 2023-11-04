@@ -81,7 +81,7 @@ fn main() -> Result<()> {
                 .unwrap();
 
             // initialize renderer
-            renderer.get_or_insert_with(|| Renderer::new(&gl_display));
+            renderer.get_or_insert_with(|| Renderer::new(&gl_display).unwrap());
 
             state = Some((gl_context, gl_surface, window));
         }

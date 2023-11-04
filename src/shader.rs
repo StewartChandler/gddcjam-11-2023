@@ -1,10 +1,8 @@
-use std::{ffi::CStr, marker::PhantomData, num::NonZeroU32, ops::Deref};
+use std::{ffi::CStr, marker::PhantomData, num::NonZeroU32, ops::Deref, ptr};
 
 use gl::types::*;
 
 use eyre::{eyre, Context, Result};
-
-use crate::renderer::Renderer;
 
 #[derive(Debug)]
 pub(crate) struct Shader<'a, const ST: GLenum> {
@@ -32,21 +30,20 @@ impl<'a, const ST: GLenum> Drop for Shader<'a, ST> {
     }
 }
 
-impl<const ST: GLenum> Shader<'_, ST> {
-    pub fn from_bytes<'a>(_: &'a Renderer, source: &'static [u8]) -> Result<Self> {
+impl<'a, const ST: GLenum> Shader<'a, ST> {
+    pub fn from_bytes<'b>(source: &'b CStr) -> Result<Self> {
         // let source_cstr = CStr::from_bytes_with_nul(source)?;
         let res = Self {
             inner: NonZeroU32::new(unsafe { gl::CreateShader(ST) })
                 .ok_or_else(|| eyre!("unable to create shader of type {}", ST))?,
             _pd: PhantomData {},
         };
-        let len: GLint = source.len() as GLint;
         unsafe {
             gl::ShaderSource(
                 *res,
                 1,
-                (&(source.as_ptr()) as *const *const u8) as *const *const GLchar,
-                &len as *const GLint,
+                (&source.as_ptr()) as *const *const GLchar,
+                ptr::null_mut(),
             )
         }
 
@@ -82,6 +79,88 @@ impl<const ST: GLenum> Shader<'_, ST> {
     }
 }
 
+pub(crate) struct ProgramBuilder<'a> {
+    inner: NonZeroU32,
+    _pd: PhantomData<&'a ()>,
+}
+
+impl ProgramBuilder<'_> {
+    fn get<'a>(&'a self) -> &'a GLuint {
+        unsafe {
+            ((&self.inner as *const NonZeroU32) as *const u32)
+                .as_ref()
+                .unwrap_unchecked()
+        }
+    }
+}
+
+impl<'pb> ProgramBuilder<'pb> {
+    pub fn new() -> Result<Self>
+    {
+        let program: GLuint = unsafe { gl::CreateProgram() };
+        Ok(ProgramBuilder {
+            inner: NonZeroU32::new(program).ok_or_else(|| eyre!("could not create the program"))?,
+            _pd: PhantomData {},
+        })
+    }
+
+    pub fn attach<'b, const ST: GLenum>(self, shader: &'b Shader<ST>) -> Self
+    where
+        'b: 'pb,
+    {
+        unsafe { gl::AttachShader(*self.get(), **shader) };
+        self
+    }
+
+    pub fn gl_bind_attrib(self, index: GLuint, name: &CStr) -> Self {
+        unsafe { gl::BindAttribLocation(*self.get(), index, name.as_ptr()) };
+        self
+    }
+
+    pub fn build<'a>(self) -> Result<Program<'a>> 
+    where
+        'a: 'pb
+    {
+        unsafe { gl::LinkProgram(*self.get()) };
+
+        let status = {
+            let mut status: GLint = 0;
+            unsafe { gl::GetProgramiv(*self.get(), gl::LINK_STATUS, &mut status as *mut GLint) };
+            status as GLboolean
+        };
+        if status == gl::FALSE {
+            let mut log_len: GLint = 0;
+            unsafe {
+                gl::GetProgramiv(*self.get(), gl::INFO_LOG_LENGTH, &mut log_len as *mut GLint)
+            };
+            let mut buf = vec![0u8; log_len as usize].into_boxed_slice();
+            unsafe {
+                gl::GetProgramInfoLog(
+                    *self.get(),
+                    log_len as GLsizei,
+                    ptr::null_mut(),
+                    buf.as_mut_ptr() as *mut GLchar,
+                )
+            }
+
+            let err_str: &str = CStr::from_bytes_until_nul(buf.as_mut())
+                .wrap_err("program info log not null terminated")?
+                .to_str()
+                .wrap_err("program info log is not valid utf-8")?;
+
+            return Err(eyre!(
+                "program failed to link with info log: `{}`",
+                err_str
+            ));
+        }
+
+        Ok(Program {
+            inner: self.inner,
+            _pd: PhantomData {},
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Program<'a> {
     inner: NonZeroU32,
@@ -89,7 +168,9 @@ pub(crate) struct Program<'a> {
 }
 
 impl Program<'_> {
-    // TODO
+    pub fn use_program(&mut self) {
+        unsafe { gl::UseProgram(**self) };
+    }
 }
 
 impl<'a> Deref for Program<'a> {
@@ -110,9 +191,4 @@ impl<'a> Drop for Program<'a> {
     fn drop(&mut self) {
         unsafe { gl::DeleteProgram(self.inner.into()) };
     }
-}
-
-/// safe abstractions of opengl functions
-mod safe_gl {
-    use super::*;
 }
