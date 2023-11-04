@@ -4,20 +4,24 @@ use eyre::Context;
 use gl::types::*;
 use glutin::prelude::GlDisplay;
 
-use crate::shader::{Shader, Program, ProgramBuilder};
+use crate::shader::{Program, ProgramBuilder, Shader};
 
-use::eyre::Result;
+use ::eyre::Result;
 
 use safe_gl::*;
 
 #[derive(Debug)]
 pub(crate) struct Renderer<'a> {
-    program: Program<'a>
+    program: Program<'a>,
 }
 
 // Safety: explicitly added the null terminator
-const VERT: &'static CStr = unsafe{ CStr::from_bytes_with_nul_unchecked(concat!(include_str!("vert.glsl"), "\0").as_bytes()) };
-const FRAG: &'static CStr = unsafe{ CStr::from_bytes_with_nul_unchecked(concat!(include_str!("frag.glsl"), "\0").as_bytes()) };
+const VERT: &'static CStr = unsafe {
+    CStr::from_bytes_with_nul_unchecked(concat!(include_str!("vert.glsl"), "\0").as_bytes())
+};
+const FRAG: &'static CStr = unsafe {
+    CStr::from_bytes_with_nul_unchecked(concat!(include_str!("frag.glsl"), "\0").as_bytes())
+};
 
 // all
 impl<'a> Renderer<'a> {
@@ -33,8 +37,8 @@ impl<'a> Renderer<'a> {
             get_string(gl::SHADING_LANGUAGE_VERSION).unwrap()
         );
 
-        let v_shader: Shader<{gl::VERTEX_SHADER}> = Shader::from_bytes(VERT)?;
-        let f_shader: Shader<{gl::FRAGMENT_SHADER}> = Shader::from_bytes(FRAG)?;
+        let v_shader: Shader<{ gl::VERTEX_SHADER }> = Shader::from_bytes(VERT)?;
+        let f_shader: Shader<{ gl::FRAGMENT_SHADER }> = Shader::from_bytes(FRAG)?;
 
         let prog = ProgramBuilder::new()?
             .attach(&v_shader)

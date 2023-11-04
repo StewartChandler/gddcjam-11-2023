@@ -95,8 +95,7 @@ impl ProgramBuilder<'_> {
 }
 
 impl<'pb> ProgramBuilder<'pb> {
-    pub fn new() -> Result<Self>
-    {
+    pub fn new() -> Result<Self> {
         let program: GLuint = unsafe { gl::CreateProgram() };
         Ok(ProgramBuilder {
             inner: NonZeroU32::new(program).ok_or_else(|| eyre!("could not create the program"))?,
@@ -117,9 +116,9 @@ impl<'pb> ProgramBuilder<'pb> {
         self
     }
 
-    pub fn build<'a>(self) -> Result<Program<'a>> 
+    pub fn build<'a>(self) -> Result<Program<'a>>
     where
-        'a: 'pb
+        'a: 'pb,
     {
         unsafe { gl::LinkProgram(*self.get()) };
 
@@ -148,10 +147,7 @@ impl<'pb> ProgramBuilder<'pb> {
                 .to_str()
                 .wrap_err("program info log is not valid utf-8")?;
 
-            return Err(eyre!(
-                "program failed to link with info log: `{}`",
-                err_str
-            ));
+            return Err(eyre!("program failed to link with info log: `{}`", err_str));
         }
 
         Ok(Program {
